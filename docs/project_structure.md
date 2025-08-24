@@ -31,8 +31,8 @@ panel-ui/                     # Repository root
 │   │   │   ├── workspace/    # Workspace management
 │   │   │   ├── components/   # Vue components
 │   │   │   ├── persistence/  # Persistence plugins
+│   │   │   ├── bridge/       # Vuetistic bridge (in core)
 │   │   │   └── types/        # TypeScript definitions
-│   │   ├── dist/             # Built output (if needed)
 │   │   └── README.md
 │   └── demo-app/             # Demo application
 │       ├── package.json
@@ -82,34 +82,47 @@ packages:
 
 ## Core Library Package (`packages/panel-ui/`)
 
-### Minimal Dependencies Approach
+### Development vs Distribution Strategy
 
-The core library should have **minimal tooling dependencies**:
+The core library uses **different strategies for development vs distribution**:
 
-- **No Vite/Webpack**: Direct TypeScript compilation if builds are needed
-- **No dev server**: Demo app handles development serving
-- **Minimal build process**: May not need builds at all for local development
+**Development (Local):**
+- **TypeScript source**: Demo app loads `.ts` files directly
+- **Zero build tooling**: No compilation step during development
+- **Fast iteration**: Instant changes, no build step
+
+**Distribution (npm):**
+- **Built artifacts**: Compiled JavaScript + TypeScript definitions
+- **Semantic release**: Automated publishing with conventional commits
+- **Build process**: Required for npm distribution
+
+See [Semantic Release Strategy](./semantic_release_strategy.md) for complete publishing details.
 
 ### `packages/panel-ui/package.json`
 
 ```json
 {
-  "name": "@panel-ui/core",
-  "version": "0.1.0",
+  "name": "panel-ui",
+  "version": "0.0.0-development",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "private": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.esm.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
     }
   },
   "files": [
-    "src",
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json && vite build",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.vue",
     "test": "vitest"
@@ -121,10 +134,17 @@ The core library should have **minimal tooling dependencies**:
     "vue": "^3.4.0",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0",
+    "vite": "^5.0.0",
     "@vue/tsconfig": "^0.5.0"
   }
 }
 ```
+
+**Key Changes for Distribution:**
+- **Version**: `0.0.0-development` (managed by semantic-release)
+- **Main/Module/Types**: Point to built `dist/` artifacts
+- **Files**: Only include `dist/`, `README.md`, `LICENSE`
+- **Build script**: Compiles TypeScript and bundles for distribution
 
 ### Source Structure
 
@@ -148,7 +168,9 @@ packages/panel-ui/src/
 │   ├── LocalStoragePersistence.ts
 │   └── types.ts              # Persistence interfaces
 ├── bridge/
+│   ├── index.ts              # Bridge exports
 │   ├── types.ts              # UI abstraction interfaces
+│   ├── vuetistic.ts          # Vuetistic bridge implementation
 │   └── fallback.ts           # Fallback implementations
 └── types/
     ├── index.ts              # Main type exports
@@ -172,8 +194,9 @@ packages/panel-ui/src/
 
 ```json
 {
-  "name": "panel-ui-demo",
+  "name": "demo-app",
   "private": true,
+  "version": "0.0.0-development",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -182,7 +205,7 @@ packages/panel-ui/src/
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@panel-ui/core": "workspace:*",
+    "panel-ui": "workspace:*",
     "vue": "^3.4.0"
   },
   "devDependencies": {
@@ -193,6 +216,11 @@ packages/panel-ui/src/
   }
 }
 ```
+
+**Key Points:**
+- **Private**: `true` prevents accidental npm publishing
+- **Workspace dependency**: Uses `panel-ui` via workspace link
+- **No semantic-release**: Demo app is never published
 
 ### Vite Configuration
 
@@ -205,11 +233,15 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@panel-ui/core': '../panel-ui/src'
+      'panel-ui': '../panel-ui/src'
     }
   }
 })
 ```
+
+**Development vs Production:**
+- **Development**: Vite alias points to TypeScript source
+- **Production**: Would use built artifacts from `dist/` (if needed)
 
 ---
 
@@ -260,9 +292,34 @@ pnpm build:demo
 
 ---
 
-## Questions to Resolve
+## Architectural Decisions Made
 
-1. **Build requirement**: Do we need a build step for the library at all?
-2. **Distribution**: How will the package be published (source vs built)?
-3. **Bridge packages**: Where do Vuetistic bridge packages fit in structure?
-4. **Testing strategy**: Unit tests in library, integration tests in demo?
+### 1. **Dual Development/Distribution Strategy**
+- **Decision**: TypeScript source for development, built artifacts for npm distribution
+- **Rationale**: Fast development iteration + standard npm package distribution
+- **Implementation**: Demo app uses source via Vite alias, npm gets built `dist/`
+- **Build process**: Required for semantic-release publishing
+
+### 2. **Bridge in Core Package**
+- **Decision**: Vuetistic bridge lives in `packages/panel-ui/src/bridge/`
+- **Rationale**: Simpler package structure, easier maintenance
+- **Implementation**: Optional import, no hard dependency on Vuetistic
+
+### 3. **Monorepo Structure**
+- **Decision**: pnpm workspaces with `panel-ui` + `demo-app`
+- **Rationale**: Clean separation, local development integration
+- **Benefit**: Demo app tests real usage patterns with zero build friction
+
+---
+
+## Future Considerations
+
+1. **Additional Bridges**: Material UI, Ant Design, etc. can be added to bridge folder
+2. **Testing Strategy**: Unit tests in library, integration tests in demo app
+3. **Build Optimization**: Bundle size optimization, tree-shaking improvements
+4. **Documentation**: Auto-generated API docs from TypeScript definitions
+
+## Related Documentation
+
+- [Main Design Document](./main_design_document.md) - Complete architectural overview
+- [Semantic Release Strategy](./semantic_release_strategy.md) - Automated publishing setup
