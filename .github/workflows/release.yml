@@ -2,7 +2,7 @@ name: Release panel-ui
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'packages/panel-ui/**'
       - '.github/workflows/release.yml'

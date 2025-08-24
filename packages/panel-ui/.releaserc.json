@@ -1,6 +1,6 @@
 {
   "extends": "semantic-release-monorepo",
-  "tagFormat": "panel-ui-v${version}",
+  "tagFormat": "v${version}",
   "plugins": [
     ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
     "@semantic-release/release-notes-generator",
